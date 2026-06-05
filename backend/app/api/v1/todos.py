@@ -34,7 +34,9 @@ async def list_todos(
     """Get paginated list of todos."""
     skip = (page - 1) * size
 
-    cache_key = "todos:list"
+    """Each user have their own todos list, so we need to use user_id in the cache key"""
+    cache_key = f"todos:list:{current_user.id}"
+
 
     # Try to get from cache
     cached = await redis.get(cache_key)
@@ -79,10 +81,13 @@ async def create_new_todo(
     todo_data: TodoCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    redis: RedisClient = Depends(get_redis), # <-- Thêm dependency redis
 ):
     """Create a new todo item."""
     todo = await create_todo(db, todo_data, current_user.id)
+    await redis.delete(f"todos:list:{current_user.id}") # <-- Thêm dòng xóa cache này
     return todo
+
 
 
 @router.get("/{todo_id}", response_model=TodoResponse)
@@ -97,6 +102,13 @@ async def get_todo(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Todo not found",
+        )
+
+    # <-- Thêm đoạn kiểm tra quyền sở hữu (IDOR check)
+    if todo.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this todo",
         )
 
     return todo
@@ -118,9 +130,17 @@ async def update_existing_todo(
             detail="Todo not found",
         )
 
+    # <-- Thêm kiểm tra quyền sở hữu (IDOR check)
+    if todo.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this todo",
+        )
+
     update_data = todo_data.model_dump()
 
-    if todo_data.completed:
+    # <-- Sửa để có thể cập nhật trạng thái False (Chưa hoàn thành)
+    if todo_data.completed is not None:
         todo.completed = todo_data.completed
 
     # Apply other updates
@@ -130,6 +150,7 @@ async def update_existing_todo(
         todo.description = update_data["description"]
 
     updated_todo = await update_todo(db, todo, {})
+    await redis.delete(f"todos:list:{current_user.id}") # <-- Thêm dòng xóa cache này
 
     return updated_todo
 
@@ -149,6 +170,14 @@ async def delete_existing_todo(
             detail="Todo not found",
         )
 
+    # <-- Thêm kiểm tra quyền sở hữu (IDOR check)
+    if todo.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete this todo",
+        )
+
     await delete_todo(db, todo)
+    await redis.delete(f"todos:list:{current_user.id}") # <-- Thêm dòng xóa cache này
 
     return None
