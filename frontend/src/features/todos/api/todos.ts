@@ -62,13 +62,15 @@ export function useCreateTodo() {
 
 
 export function useUpdateTodo() {
-  return useMutation({
+  return useMutation<
+    Todo,
+    Error,
+    { id: string; data: UpdateTodoRequest },
+    { previousTodos: TodoListResponse | undefined }
+  >({
     mutationFn: async ({
       id,
       data,
-    }: {
-      id: string;
-      data: UpdateTodoRequest;
     }): Promise<Todo> => {
       const response = await api.put(`/todos/${id}`, data);
       return response.data;
@@ -92,7 +94,10 @@ export function useUpdateTodo() {
 
       return { previousTodos };
     },
-    onError: () => {
+    onError: (_err, _variables, context) => {
+      if (context?.previousTodos) {
+        queryClient.setQueryData(["todos"], context.previousTodos);
+      }
       toast.error("Failed to update todo");
     },
     onSettled: () => {
@@ -100,6 +105,7 @@ export function useUpdateTodo() {
     },
   });
 }
+
 
 export function useDeleteTodo() {
   return useMutation({
