@@ -138,8 +138,8 @@ async def update_existing_todo(
             detail="Not authorized to update this todo",
         )
 
+    # Lấy các dữ liệu thực tế được truyền lên
     update_data = todo_data.model_dump(exclude_unset=True)
-
 
     # Chuyển dữ liệu xuống tầng Service để xử lý gán và cập nhật vào Database
     updated_todo = await update_todo(db, todo, update_data)

@@ -20,12 +20,14 @@ async def get_current_user(
     token = credentials.credentials
     payload = verify_token(token)
 
-    if payload is None:
+    
+    # Kiểm tra token hợp lệ và phải có loại là "access"
+    if payload is None or payload.get("type") != "access":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token",
         )
-
+    
     user_id = payload.get("sub")
     if user_id is None:
         raise HTTPException(
