@@ -1,18 +1,36 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class TodoCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: str | None = None
 
+    @field_validator("title")
+    @classmethod
+    def trim_title(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Title cannot be empty or contain only whitespace")
+        return stripped
+
 
 class TodoUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = None
     completed: bool | None = None
+
+    @field_validator("title")
+    @classmethod
+    def trim_title(cls, v: str | None) -> str | None:
+        if v is not None:
+            stripped = v.strip()
+            if not stripped:
+                raise ValueError("Title cannot be empty or contain only whitespace")
+            return stripped
+        return v
 
 
 class TodoResponse(BaseModel):
