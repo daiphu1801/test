@@ -53,7 +53,7 @@ def verify_token(token: str) -> dict[str, Any] | None:
             token,
             settings.JWT_SECRET,
             algorithms=[settings.JWT_ALGORITHM],
-            options={"verify_exp": False},
+            options={"verify_exp": True}, # <-- Đổi từ False sang True để kích hoạt kiểm tra thời hạn
         )
         return payload
     except JWTError:

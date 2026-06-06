@@ -34,7 +34,7 @@ interface UpdateTodoRequest {
 
 export function useTodos(page: number = 1, size: number = 10000) {
   return useQuery({
-    queryKey: ["todos"],
+    queryKey: ["todos", { page, size }], // <-- Thêm page, size vào key
     queryFn: async (): Promise<TodoListResponse> => {
       const response = await api.get("/todos", {
         params: { page, size },
@@ -43,6 +43,7 @@ export function useTodos(page: number = 1, size: number = 10000) {
     },
   });
 }
+
 
 export function useCreateTodo() {
   return useMutation({
@@ -60,13 +61,12 @@ export function useCreateTodo() {
   });
 }
 
-
 export function useUpdateTodo() {
   return useMutation<
     Todo,
     Error,
     { id: string; data: UpdateTodoRequest },
-    { previousTodos: TodoListResponse | undefined }
+    { previousQueries: [any, TodoListResponse | undefined][] } // <-- Đổi kiểu context lưu trữ nhiều query cache
   >({
     mutationFn: async ({
       id,
@@ -76,27 +76,31 @@ export function useUpdateTodo() {
       return response.data;
     },
     onMutate: async ({ id, data }) => {
-      // Cancel outgoing queries
+      // Hủy mọi request refetch todos đang chạy để tránh đè dữ liệu
       await queryClient.cancelQueries({ queryKey: ["todos"] });
-
-      // Snapshot previous value
-      const previousTodos = queryClient.getQueryData<TodoListResponse>(["todos"]);
-
-      // Optimistically update
-      if (previousTodos) {
-        queryClient.setQueryData<TodoListResponse>(["todos"], {
-          ...previousTodos,
-          items: previousTodos.items.map((todo) =>
-            todo.id === id ? { ...todo, ...data } : todo
-          ),
-        });
-      }
-
-      return { previousTodos };
+      // Lấy toàn bộ các cache liên quan đến key ["todos"] (gồm mọi trang)
+      const previousQueries = queryClient.getQueriesData<TodoListResponse>({
+        queryKey: ["todos"],
+      });
+      // Cập nhật Optimistic cho tất cả các cache tìm thấy
+      previousQueries.forEach(([queryKey, previousTodos]) => {
+        if (previousTodos) {
+          queryClient.setQueryData<TodoListResponse>(queryKey, {
+            ...previousTodos,
+            items: previousTodos.items.map((todo) =>
+              todo.id === id ? { ...todo, ...data } : todo
+            ),
+          });
+        }
+      });
+      return { previousQueries };
     },
     onError: (_err, _variables, context) => {
-      if (context?.previousTodos) {
-        queryClient.setQueryData(["todos"], context.previousTodos);
+      // Rollback lại tất cả các cache về trạng thái trước khi sửa nếu lỗi
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(([queryKey, previousTodos]) => {
+          queryClient.setQueryData(queryKey, previousTodos);
+        });
       }
       toast.error("Failed to update todo");
     },

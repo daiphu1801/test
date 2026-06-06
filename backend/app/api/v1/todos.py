@@ -35,7 +35,7 @@ async def list_todos(
     skip = (page - 1) * size
 
     """Each user have their own todos list, so we need to use user_id in the cache key"""
-    cache_key = f"todos:list:{current_user.id}"
+    cache_key = f"todos:list:{current_user.id}:{page}:{size}"
 
 
     # Try to get from cache
@@ -48,8 +48,6 @@ async def list_todos(
 
     items = []
     for todo in todos:
-        user_result = await db.execute(select(User).where(User.id == todo.user_id))
-        user = user_result.scalar_one_or_none()
         items.append(
             TodoResponse(
                 id=todo.id,
@@ -59,7 +57,7 @@ async def list_todos(
                 user_id=todo.user_id,
                 created_at=todo.created_at,
                 updated_at=todo.updated_at,
-                user_email=user.email if user else None,
+                user_email=current_user.email,
             )
         )
 
@@ -85,7 +83,10 @@ async def create_new_todo(
 ):
     """Create a new todo item."""
     todo = await create_todo(db, todo_data, current_user.id)
-    await redis.delete(f"todos:list:{current_user.id}") # <-- Thêm dòng xóa cache này
+      # Tìm và xóa toàn bộ cache của user này
+    keys = await redis.client.keys(f"todos:list:{current_user.id}:*")
+    for key in keys:
+        await redis.delete(key)
     return todo
 
 
@@ -130,29 +131,27 @@ async def update_existing_todo(
             detail="Todo not found",
         )
 
-    # <-- Thêm kiểm tra quyền sở hữu (IDOR check)
+    # Kiểm tra quyền sở hữu (IDOR check)
     if todo.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this todo",
         )
 
-    update_data = todo_data.model_dump()
+    # Lấy các dữ liệu thực tế được truyền lên
+    update_data = todo_data.model_dump(exclude_unset=True)
 
-    # <-- Sửa để có thể cập nhật trạng thái False (Chưa hoàn thành)
-    if todo_data.completed is not None:
-        todo.completed = todo_data.completed
+    # Chuyển dữ liệu xuống tầng Service để xử lý gán và cập nhật vào Database
+    updated_todo = await update_todo(db, todo, update_data)
 
-    # Apply other updates
-    if update_data.get("title") is not None:
-        todo.title = update_data["title"]
-    if "description" in update_data:
-        todo.description = update_data["description"]
-
-    updated_todo = await update_todo(db, todo, {})
-    await redis.delete(f"todos:list:{current_user.id}") # <-- Thêm dòng xóa cache này
-
+    # Tìm và xóa toàn bộ cache của user này để đồng bộ dữ liệu mới nhất
+    keys = await redis.client.keys(f"todos:list:{current_user.id}:*")
+    for key in keys:
+        await redis.delete(key)
+        
     return updated_todo
+
+
 
 
 @router.delete("/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -178,6 +177,9 @@ async def delete_existing_todo(
         )
 
     await delete_todo(db, todo)
-    await redis.delete(f"todos:list:{current_user.id}") # <-- Thêm dòng xóa cache này
+     # Tìm và xóa toàn bộ cache của user này
+    keys = await redis.client.keys(f"todos:list:{current_user.id}:*")
 
+    for key in keys:
+        await redis.delete(key)
     return None
