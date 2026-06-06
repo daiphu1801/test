@@ -9,7 +9,6 @@ from app.schemas.user import UserCreate
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
-    # Chuẩn hóa email tìm kiếm về chữ thường
     result = await db.execute(select(User).where(User.email == email.lower()))
     return result.scalar_one_or_none()
 
@@ -19,15 +18,14 @@ async def get_user_by_id(db: AsyncSession, user_id: uuid.UUID) -> User | None:
     return result.scalar_one_or_none()
 
 
-
 async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
     hashed_password = get_password_hash(user_data.password)
     user = User(
-        email=user_data.email.lower(), # <-- Chuẩn hóa email lưu xuống DB về chữ thường
+        email=user_data.email.lower(),
         hashed_password=hashed_password,
     )
     db.add(user)
-    await db.flush()
+    await db.flush()      # <-- Ghi nháp sinh ID
     await db.refresh(user)
     return user
 

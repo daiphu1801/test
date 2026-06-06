@@ -34,6 +34,8 @@ async def register(
 
     user = await create_user(db, user_data)
 
+    await db.commit()  # <-- BẮT BUỘC BỔ SUNG DÒNG NÀY ĐỂ LƯU USER MỚI
+
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
 
