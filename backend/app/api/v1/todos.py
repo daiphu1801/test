@@ -146,7 +146,6 @@ async def update_existing_todo(
     await db.commit()  # <-- Lưu vĩnh viễn xuống DB
     return updated_todo
 
-
 @router.delete("/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_existing_todo(
     todo_id: uuid.UUID,
@@ -170,6 +169,7 @@ async def delete_existing_todo(
     
     # Xóa cache
     keys = await redis.client.keys(f"todos:list:{current_user.id}:*")
+    
     for key in keys:
         await redis.delete(key)
         
