@@ -131,7 +131,7 @@ async def update_existing_todo(
             detail="Todo not found",
         )
 
-    # <-- Thêm kiểm tra quyền sở hữu (IDOR check)
+    # Kiểm tra quyền sở hữu (IDOR check)
     if todo.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -141,22 +141,14 @@ async def update_existing_todo(
     update_data = todo_data.model_dump(exclude_unset=True)
 
 
-    # <-- Sửa để có thể cập nhật trạng thái False (Chưa hoàn thành)
-    if todo_data.completed is not None:
-        todo.completed = todo_data.completed
+    # Chuyển dữ liệu xuống tầng Service để xử lý gán và cập nhật vào Database
+    updated_todo = await update_todo(db, todo, update_data)
 
-    # Apply other updates
-    if update_data.get("title") is not None:
-        todo.title = update_data["title"]
-    if "description" in update_data:
-        todo.description = update_data["description"]
-
-    updated_todo = await update_todo(db, todo, {})
-      # Tìm và xóa toàn bộ cache của user này
+    # Tìm và xóa toàn bộ cache của user này để đồng bộ dữ liệu mới nhất
     keys = await redis.client.keys(f"todos:list:{current_user.id}:*")
-
     for key in keys:
         await redis.delete(key)
+        
     return updated_todo
 
 @router.delete("/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
