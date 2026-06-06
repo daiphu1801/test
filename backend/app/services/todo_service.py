@@ -16,7 +16,7 @@ async def create_todo(
         user_id=user_id,
     )
     db.add(todo)
-    await db.flush()
+    await db.flush()      # <-- Ghi nháp sinh ID
     await db.refresh(todo)
     return todo
 
@@ -27,8 +27,6 @@ async def get_todos(
     skip: int = 0,
     limit: int = 20,
 ) -> tuple[list[Todo], int]:
-    """Get all todos with pagination for a specific user."""
-    # Thêm .order_by() trước offset và limit để cố định thứ tự sắp xếp phân trang
     query = (
         select(Todo)
         .where(Todo.user_id == user_id)
@@ -38,11 +36,9 @@ async def get_todos(
     )
     result = await db.execute(query)
     todos = list(result.scalars().all())
-    # Count total
-    count_query = select(func.count()).select_from(Todo).where(Todo.user_id == user_id)
     
+    count_query = select(func.count()).select_from(Todo).where(Todo.user_id == user_id)
     total = await db.execute(count_query)
-
     return todos, total.scalar_one()
 
 
@@ -54,11 +50,11 @@ async def get_todo_by_id(db: AsyncSession, todo_id: uuid.UUID) -> Todo | None:
 async def update_todo(db: AsyncSession, todo: Todo, update_data: dict) -> Todo:
     for key, value in update_data.items():
         setattr(todo, key, value)
-    await db.flush()
+    await db.flush()      # <-- Ghi nháp
     await db.refresh(todo)
     return todo
 
 
 async def delete_todo(db: AsyncSession, todo: Todo) -> None:
     await db.delete(todo)
-    await db.flush()
+    await db.flush()      # <-- Ghi nháp
