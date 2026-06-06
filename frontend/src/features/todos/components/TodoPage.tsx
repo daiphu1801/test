@@ -67,11 +67,13 @@ export function TodoPage() {
       </main>
 
       {/* Create Todo Dialog */}
-      <TodoForm
-        mode="create"
-        open={showCreateForm}
-        onClose={() => setShowCreateForm(false)}
-      />
+      {showCreateForm && (
+        <TodoForm
+          mode="create"
+          open={showCreateForm}
+          onClose={() => setShowCreateForm(false)}
+        />
+      )}
     </div>
   );
 }
