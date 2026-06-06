@@ -138,8 +138,8 @@ async def update_existing_todo(
             detail="Not authorized to update this todo",
         )
 
-    # Lấy các dữ liệu thực tế được truyền lên
     update_data = todo_data.model_dump(exclude_unset=True)
+
 
     # Chuyển dữ liệu xuống tầng Service để xử lý gán và cập nhật vào Database
     updated_todo = await update_todo(db, todo, update_data)
@@ -150,9 +150,6 @@ async def update_existing_todo(
         await redis.delete(key)
         
     return updated_todo
-
-
-
 
 @router.delete("/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_existing_todo(
@@ -179,7 +176,7 @@ async def delete_existing_todo(
     await delete_todo(db, todo)
      # Tìm và xóa toàn bộ cache của user này
     keys = await redis.client.keys(f"todos:list:{current_user.id}:*")
-
+    
     for key in keys:
         await redis.delete(key)
     return None
